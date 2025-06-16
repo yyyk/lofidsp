@@ -75,27 +75,6 @@ const params: AudioParam[] = [
   },
 ];
 
-const downloadEmojis = [
-  "🎤",
-  "🎸",
-  "🥁",
-  "🎹",
-  "🎺",
-  "🎷",
-  "🎻",
-  "🪕",
-  "🎪",
-  "🎵",
-  "🎶",
-  "🎼",
-  "💿",
-  "🎧",
-  "🔊",
-  "📻",
-  "💾",
-  "⬇️",
-];
-
 function process(
   audioBuffer: AudioBuffer,
   targetSampleRate = 24000,
@@ -145,7 +124,6 @@ function processAudio(
   name: string,
   audioBuffer: AudioBuffer,
   param: AudioParam,
-  index: number
 ) {
   const { targetSampleRate, targetBitDepth, octave } = param;
   const [output, sampleRate, numberOfChannels] = process(
@@ -278,8 +256,8 @@ async function onFileChange(e: any): Promise<void> {
     player.src = url;
   }
 
-  params.forEach((param, index) =>
-    processAudio(file.name, audioBuffer, param, index)
+  params.forEach((param) =>
+    processAudio(file.name, audioBuffer, param)
   );
 }
 
