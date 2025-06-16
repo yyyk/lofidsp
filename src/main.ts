@@ -81,15 +81,9 @@ function process(
   targetBitDepth = 12,
   octave = 1
 ): [Float32Array, number, number] {
-  // console.log("original numberOfChannels", audioBuffer.numberOfChannels);
-  // console.log("original sampleRate", audioBuffer.sampleRate);
-
   audioBuffer = stereoToMono(audioBuffer);
   const sampleRate = audioBuffer.sampleRate;
   const numberOfChannels = audioBuffer.numberOfChannels;
-
-  // console.log("processed numberOfChannels", numberOfChannels);
-  // console.log("processed sampleRate", sampleRate);
 
   const interleaved = new Float32Array(audioBuffer.length * numberOfChannels);
   for (let i = 0; i < audioBuffer.length; i++) {
@@ -99,11 +93,11 @@ function process(
     }
   }
 
-  let output = upSample(interleaved, sampleRate, 48000)
+  let output = upSample(interleaved, sampleRate, 48000);
   output = repitch(output, 12 * octave);
   output = downSample(output, 48000, targetSampleRate);
   output = bitReduce(output, targetBitDepth);
-  output = lowPassIIR(output, targetSampleRate, targetSampleRate * 2 / 3);
+  output = lowPassIIR(output, targetSampleRate, (targetSampleRate * 2) / 3);
   output = repitch(output, -12 * octave);
   output = upSample(output, targetSampleRate, 44100);
   // output = lowPassIIR(output, 44100, targetSampleRate * 2 / 3)
@@ -117,14 +111,16 @@ function makeExportFilename(
   bitDepth: number,
   repitchAmount: number
 ) {
-  const nameWithoutExt = originalName.replace(/\.[^/.]+$/, ""); // removes extension
-  return `${nameWithoutExt}_${sampleRate}Hz_${bitDepth}bit_${repitchAmount > 0 ? repitchAmount : 'un'}pre-pitched.wav`;
+  const nameWithoutExt = originalName.replace(/\.[^/.]+$/, "");
+  return `${nameWithoutExt}_${sampleRate}Hz_${bitDepth}bit_${
+    repitchAmount > 0 ? repitchAmount : "un"
+  }pre-pitched.wav`;
 }
 
 function processAudio(
   name: string,
   audioBuffer: AudioBuffer,
-  param: AudioParam,
+  param: AudioParam
 ) {
   const { targetSampleRate, targetBitDepth, octave } = param;
   const [output, sampleRate, numberOfChannels] = process(
@@ -152,8 +148,13 @@ function processAudio(
     title.id = `title_${handle}`;
     section.appendChild(title);
   }
-  title.innerHTML = `${targetSampleRate}Hz / ${targetBitDepth}bit${octave > 0 ? `<br/><span class="small-text">${octave} octave${octave > 1 ? "s" : ""} pre-pitched<span>` : ''}`;
-  // title.innerText = `${targetSampleRate}Hz / ${targetBitDepth}bit${octave > 0 ? ` / ${octave} octave${octave > 1 ? "s" : ""} pre-pitched` : ''}`;
+  title.innerHTML = `${targetSampleRate}Hz / ${targetBitDepth}bit${
+    octave > 0
+      ? `<br/><span class="small-text">${octave} octave${
+          octave > 1 ? "s" : ""
+        } pre-pitched<span>`
+      : ""
+  }`;
   // Audio Player
   let player = document.getElementById(`audio_${handle}`) as HTMLAudioElement;
   if (!player) {
@@ -170,8 +171,7 @@ function processAudio(
   }
   button = document.createElement("button");
   button.id = `button_${handle}`;
-  // button.innerText = `${downloadEmojis[index]} download`;
-  button.innerText = 'download';
+  button.innerText = "download";
   button.addEventListener("click", () => {
     const a = document.createElement("a");
     a.href = url;
@@ -200,9 +200,11 @@ async function onFileChange(e: any): Promise<void> {
   ) as HTMLParagraphElement;
   dragText.textContent = `✅ ${file.name} selected`;
   dragText.style.color = "var(--mpc-red)";
-  const originalAudio = document.getElementById('original-audio') as HTMLAudioElement
+  const originalAudio = document.getElementById(
+    "original-audio"
+  ) as HTMLAudioElement;
   if (originalAudio) {
-    inputContainer.removeChild(originalAudio)
+    inputContainer.removeChild(originalAudio);
   }
 
   const audioContainer = document.getElementById(
@@ -215,10 +217,16 @@ async function onFileChange(e: any): Promise<void> {
   const arrayBuffer = await file.arrayBuffer();
   if (audioCtx) {
     audioCtx.close();
-    console.log("close audio context");
+    // console.log("close audio context");
   }
   audioCtx = new window.AudioContext({ sampleRate: 44100 });
-  const decodedData = await audioCtx.decodeAudioData(arrayBuffer);
+  let decodedData;
+  try {
+    decodedData = await audioCtx.decodeAudioData(arrayBuffer);
+  } catch {
+    handleDropError();
+    return;
+  }
 
   // console.log(decodedData)
 
@@ -239,7 +247,7 @@ async function onFileChange(e: any): Promise<void> {
   const audioBuffer = await offlineCtx.startRendering();
 
   {
-    const {numberOfChannels, sampleRate} = audioBuffer
+    const { numberOfChannels, sampleRate } = audioBuffer;
     const interleaved = new Float32Array(audioBuffer.length * numberOfChannels);
     for (let i = 0; i < audioBuffer.length; i++) {
       for (let ch = 0; ch < numberOfChannels; ch++) {
@@ -249,19 +257,35 @@ async function onFileChange(e: any): Promise<void> {
     }
     const blob = encodeWAV(interleaved, sampleRate, numberOfChannels);
     const url = URL.createObjectURL(blob);
-    let player = document.getElementById('original-audio') as HTMLAudioElement;
+    let player = document.getElementById("original-audio") as HTMLAudioElement;
     if (!player) {
       player = document.createElement("audio");
-      player.id = 'original-audio';
+      player.id = "original-audio";
       player.controls = true;
       inputContainer.appendChild(player);
     }
     player.src = url;
   }
 
-  params.forEach((param) =>
-    processAudio(file.name, audioBuffer, param)
-  );
+  params.forEach((param) => processAudio(file.name, audioBuffer, param));
+}
+
+function handleDropError() {
+  const inputContainer = document.getElementById(
+    "input-container"
+  ) as HTMLDivElement;
+  // Show error for non-audio files
+  const dragText = inputContainer.querySelector(
+    ".drag-text"
+  ) as HTMLParagraphElement;
+  dragText.textContent = "❌ Please select an audio file";
+  dragText.style.color = "var(--text-error)";
+
+  // Reset text after 3 seconds
+  setTimeout(() => {
+    dragText.textContent = "📁 Select an audio file or drag & drop here";
+    dragText.style.color = "var(--text-secondary)";
+  }, 3000);
 }
 
 function main() {
@@ -334,18 +358,7 @@ function main() {
         dragText.textContent = `✅ ${audioFile.name} selected`;
         dragText.style.color = "var(--mpc-red)";
       } else {
-        // Show error for non-audio files
-        const dragText = inputContainer.querySelector(
-          ".drag-text"
-        ) as HTMLParagraphElement;
-        dragText.textContent = "❌ Please select an audio file";
-        dragText.style.color = "var(--text-error)";
-
-        // Reset text after 3 seconds
-        setTimeout(() => {
-          dragText.textContent = "📁 Select an audio file or drag & drop here";
-          dragText.style.color = "var(--text-secondary)";
-        }, 3000);
+        handleDropError();
       }
     }
   }
