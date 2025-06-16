@@ -216,8 +216,11 @@ async function onFileChange(e: any): Promise<void> {
     audioCtx.close();
     console.log("close audio context");
   }
-  audioCtx = new window.AudioContext();
+  // audioCtx = new window.AudioContext({ sampleRate: 48000 });
+  audioCtx = new window.AudioContext({ sampleRate: 44100 });
   const decodedData = await audioCtx.decodeAudioData(arrayBuffer);
+
+  console.log(decodedData)
 
   const offlineCtx = new OfflineAudioContext(
     decodedData.numberOfChannels,
