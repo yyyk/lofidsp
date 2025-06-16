@@ -81,15 +81,15 @@ function process(
   targetBitDepth = 12,
   octave = 1
 ): [Float32Array, number, number] {
-  console.log("original numberOfChannels", audioBuffer.numberOfChannels);
-  console.log("original sampleRate", audioBuffer.sampleRate);
+  // console.log("original numberOfChannels", audioBuffer.numberOfChannels);
+  // console.log("original sampleRate", audioBuffer.sampleRate);
 
   audioBuffer = stereoToMono(audioBuffer);
   const sampleRate = audioBuffer.sampleRate;
   const numberOfChannels = audioBuffer.numberOfChannels;
 
-  console.log("processed numberOfChannels", numberOfChannels);
-  console.log("processed sampleRate", audioBuffer.sampleRate);
+  // console.log("processed numberOfChannels", numberOfChannels);
+  // console.log("processed sampleRate", sampleRate);
 
   const interleaved = new Float32Array(audioBuffer.length * numberOfChannels);
   for (let i = 0; i < audioBuffer.length; i++) {
@@ -99,15 +99,16 @@ function process(
     }
   }
 
-  let output = repitch(interleaved, 12 * octave);
-  output = downSample(output, sampleRate, targetSampleRate);
+  let output = upSample(interleaved, sampleRate, 48000)
+  output = repitch(output, 12 * octave);
+  output = downSample(output, 48000, targetSampleRate);
   output = bitReduce(output, targetBitDepth);
   output = lowPassIIR(output, targetSampleRate, targetSampleRate * 2 / 3);
   output = repitch(output, -12 * octave);
-  output = upSample(output, targetSampleRate, sampleRate);
-  // output = lowPassIIR(output, sampleRate, targetSampleRate * 2 / 3)
+  output = upSample(output, targetSampleRate, 44100);
+  // output = lowPassIIR(output, 44100, targetSampleRate * 2 / 3)
 
-  return [output, sampleRate, numberOfChannels];
+  return [output, 44100, numberOfChannels];
 }
 
 function makeExportFilename(
@@ -209,18 +210,17 @@ async function onFileChange(e: any): Promise<void> {
   ) as HTMLDivElement;
   audioContainer.innerHTML = "";
 
-  console.log(file);
+  // console.log(file);
 
   const arrayBuffer = await file.arrayBuffer();
   if (audioCtx) {
     audioCtx.close();
     console.log("close audio context");
   }
-  // audioCtx = new window.AudioContext({ sampleRate: 48000 });
   audioCtx = new window.AudioContext({ sampleRate: 44100 });
   const decodedData = await audioCtx.decodeAudioData(arrayBuffer);
 
-  console.log(decodedData)
+  // console.log(decodedData)
 
   const offlineCtx = new OfflineAudioContext(
     decodedData.numberOfChannels,
