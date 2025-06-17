@@ -51,7 +51,17 @@
 
 body {
   min-height: 100vh;
-  padding: 20px;
+  padding: 20px 20px 50px;
+  position: relative;
+}
+
+.copyright {
+  font-weight: 400;
+  font-size: 0.83em;
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .container {
@@ -274,7 +284,9 @@ button[id^="button_"]:hover::before {
 
 button[id^="button_"]:active {
   transform: translateY(1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.4),
+    inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Responsive design */
