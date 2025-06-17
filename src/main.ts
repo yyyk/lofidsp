@@ -255,11 +255,12 @@ async function onFileChange(e: any): Promise<void> {
 
     audioBuffer = await offlineCtx.startRendering();
   } catch {
-    // TODO: handle error
+    handleDropError("❌ Something went wrong. Please try again");
     return;
   }
 
   {
+    // Original Audio
     const { numberOfChannels, sampleRate } = audioBuffer;
     const interleaved = new Float32Array(audioBuffer.length * numberOfChannels);
     for (let i = 0; i < audioBuffer.length; i++) {
@@ -280,10 +281,11 @@ async function onFileChange(e: any): Promise<void> {
     player.src = url;
   }
 
+  // Processed Audio
   params.forEach((param) => processAudio(file.name, audioBuffer, param));
 }
 
-function handleDropError() {
+function handleDropError(message?: string) {
   const inputContainer = document.getElementById(
     "input-container"
   ) as HTMLDivElement;
@@ -291,7 +293,7 @@ function handleDropError() {
   const dragText = inputContainer.querySelector(
     ".drag-text"
   ) as HTMLParagraphElement;
-  dragText.textContent = "❌ Please select an audio file";
+  dragText.textContent = message ?? "❌ Please select an audio file";
   dragText.style.color = "var(--text-error)";
 
   // Reset text after 3 seconds
