@@ -1,4 +1,4 @@
-function bitReduceSample(sample: number, bits: number): number {
+export function bitReduceSample(sample: number, bits: number): number {
   const maxInt = (1 << (bits - 1)) - 1;
   return Math.round(sample * maxInt) / maxInt;
 }
