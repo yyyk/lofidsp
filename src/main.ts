@@ -220,15 +220,15 @@ async function onFileChange(e: any): Promise<void> {
   audioContainer.innerHTML = "";
 
   // console.log(file);
-
-  const arrayBuffer = await file.arrayBuffer();
-  if (audioCtx) {
-    audioCtx.close();
-    // console.log("close audio context");
-  }
-  audioCtx = new window.AudioContext({ sampleRate: SampleRates["44.1kHz"] });
   let decodedData;
+
   try {
+    const arrayBuffer = await file.arrayBuffer();
+    if (audioCtx) {
+      audioCtx.close();
+      // console.log("close audio context");
+    }
+    audioCtx = new window.AudioContext({ sampleRate: SampleRates["44.1kHz"] });
     decodedData = await audioCtx.decodeAudioData(arrayBuffer);
   } catch {
     handleDropError();
@@ -236,22 +236,28 @@ async function onFileChange(e: any): Promise<void> {
   }
 
   // console.log(decodedData)
+  let audioBuffer;
 
-  const offlineCtx = new OfflineAudioContext(
-    decodedData.numberOfChannels,
-    decodedData.length,
-    decodedData.sampleRate
-  );
-  const source = offlineCtx.createBufferSource();
-  source.buffer = decodedData;
+  try {
+    const offlineCtx = new OfflineAudioContext(
+      decodedData.numberOfChannels,
+      decodedData.length,
+      decodedData.sampleRate
+    );
+    const source = offlineCtx.createBufferSource();
+    source.buffer = decodedData;
 
-  const gainNode = offlineCtx.createGain();
-  gainNode.gain.value = 1;
+    const gainNode = offlineCtx.createGain();
+    gainNode.gain.value = 1;
 
-  source.connect(gainNode).connect(offlineCtx.destination);
-  source.start();
+    source.connect(gainNode).connect(offlineCtx.destination);
+    source.start();
 
-  const audioBuffer = await offlineCtx.startRendering();
+    audioBuffer = await offlineCtx.startRendering();
+  } catch {
+    // TODO: handle error
+    return;
+  }
 
   {
     const { numberOfChannels, sampleRate } = audioBuffer;
