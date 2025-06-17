@@ -12,64 +12,71 @@ interface AudioParam {
   octave: number;
 }
 
+const SampleRates = {
+  "48kHz": 48000,
+  "44.1kHz": 44100,
+  "24kHz": 24000,
+  "12kHz": 12000,
+};
+
 const params: AudioParam[] = [
   {
-    targetSampleRate: 24000,
+    targetSampleRate: SampleRates["24kHz"],
     targetBitDepth: 12,
     octave: 0,
   },
   {
-    targetSampleRate: 24000,
+    targetSampleRate: SampleRates["24kHz"],
     targetBitDepth: 12,
     octave: 1,
   },
   {
-    targetSampleRate: 24000,
+    targetSampleRate: SampleRates["24kHz"],
     targetBitDepth: 12,
     octave: 2,
   },
   {
-    targetSampleRate: 24000,
+    targetSampleRate: SampleRates["24kHz"],
     targetBitDepth: 8,
     octave: 0,
   },
   {
-    targetSampleRate: 24000,
+    targetSampleRate: SampleRates["24kHz"],
     targetBitDepth: 8,
     octave: 1,
   },
   {
-    targetSampleRate: 24000,
+    targetSampleRate: SampleRates["24kHz"],
     targetBitDepth: 8,
     octave: 2,
   },
   {
-    targetSampleRate: 12000,
+    targetSampleRate: SampleRates["12kHz"],
     targetBitDepth: 12,
     octave: 0,
   },
   {
-    targetSampleRate: 12000,
+    targetSampleRate: SampleRates["12kHz"],
     targetBitDepth: 12,
     octave: 1,
   },
   {
-    targetSampleRate: 12000,
+    targetSampleRate: SampleRates["12kHz"],
     targetBitDepth: 12,
     octave: 2,
   },
   {
-    targetSampleRate: 12000,
+    targetSampleRate: SampleRates["12kHz"],
     targetBitDepth: 8,
     octave: 0,
   },
   {
-    targetSampleRate: 12000,
+    targetSampleRate: SampleRates["12kHz"],
     targetBitDepth: 8,
     octave: 1,
   },
   {
-    targetSampleRate: 12000,
+    targetSampleRate: SampleRates["12kHz"],
     targetBitDepth: 8,
     octave: 2,
   },
@@ -77,7 +84,7 @@ const params: AudioParam[] = [
 
 function process(
   audioBuffer: AudioBuffer,
-  targetSampleRate = 24000,
+  targetSampleRate = SampleRates["24kHz"],
   targetBitDepth = 12,
   octave = 1
 ): [Float32Array, number, number] {
@@ -93,16 +100,16 @@ function process(
     }
   }
 
-  let output = upSample(interleaved, sampleRate, 48000);
+  let output = upSample(interleaved, sampleRate, SampleRates["48kHz"]);
   output = repitch(output, 12 * octave);
-  output = downSample(output, 48000, targetSampleRate);
+  output = downSample(output, SampleRates["48kHz"], targetSampleRate);
   output = bitReduce(output, targetBitDepth);
   output = lowPassIIR(output, targetSampleRate, (targetSampleRate * 2) / 3);
   output = repitch(output, -12 * octave);
-  output = upSample(output, targetSampleRate, 44100);
-  // output = lowPassIIR(output, 44100, targetSampleRate * 2 / 3)
+  output = upSample(output, targetSampleRate, SampleRates["44.1kHz"]);
+  // output = lowPassIIR(output, SampleRates["44.1kHz"], targetSampleRate * 2 / 3)
 
-  return [output, 44100, numberOfChannels];
+  return [output, SampleRates["44.1kHz"], numberOfChannels];
 }
 
 function makeExportFilename(
@@ -219,7 +226,7 @@ async function onFileChange(e: any): Promise<void> {
     audioCtx.close();
     // console.log("close audio context");
   }
-  audioCtx = new window.AudioContext({ sampleRate: 44100 });
+  audioCtx = new window.AudioContext({ sampleRate: SampleRates["44.1kHz"] });
   let decodedData;
   try {
     decodedData = await audioCtx.decodeAudioData(arrayBuffer);

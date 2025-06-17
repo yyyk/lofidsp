@@ -3,6 +3,10 @@ export function upSample(
   inputRate: number,
   outputRate: number
 ): Float32Array {
+  if (inputRate > outputRate) {
+    throw new Error("inputRate should be smaller than outputRate");
+  }
+
   const ratio = outputRate / inputRate;
   const output = new Float32Array(Math.floor(input.length * ratio));
 

@@ -10,10 +10,14 @@ function lowPassFilter(input: Float32Array, alpha: number): Float32Array {
 export function downSample(
   input: Float32Array,
   inputRate: number,
-  targetRate: number,
+  outputRate: number,
   clean = false
 ): Float32Array {
-  const ratio = inputRate / targetRate;
+  if (inputRate < outputRate) {
+    throw new Error("inputRate should be larger than outputRate");
+  }
+
+  const ratio = inputRate / outputRate;
   const source = clean ? lowPassFilter(input, 0.1) : input;
   const output = new Float32Array(Math.floor(source.length / ratio));
 
