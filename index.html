@@ -10,15 +10,44 @@
   </head>
 
   <body>
-    <div class="container">
-      <h1>Lo-Fi DSP</h1>
-      <div id="input-container">
+    <main class="container">
+      <header class="header">
+        <h1>Lo-Fi DSP</h1>
+        <p class="subtitle">
+          Vintage sampler-style resampling, bit reduction and filtering &mdash;
+          right in your browser. Nothing is uploaded.
+        </p>
+      </header>
+
+      <label id="input-container" for="fileInput">
         <input type="file" id="fileInput" accept="audio/*" />
-        <p class="drag-text">📁 Select an audio file or drag & drop here</p>
+        <span class="file-button">Choose audio file</span>
+        <span class="drag-text">or drag &amp; drop it here</span>
+      </label>
+
+      <section id="original-container" hidden>
+        <h2 class="section-label">Original</h2>
+        <p id="file-info" class="file-info"></p>
+        <audio id="original-audio" controls></audio>
+      </section>
+
+      <div id="status" class="status" role="status" aria-live="polite" hidden>
+        <span id="status-text"></span>
+        <progress id="status-progress" max="1" value="0"></progress>
       </div>
-      <div id="audio-container"></div>
-    </div>
-    <h5 class="copyright">&copy; 2025 - yyyk</h5>
+
+      <section id="results" hidden>
+        <h2 class="section-label">Processed</h2>
+        <p class="hint">
+          Pre-pitched variants are sped up by 1 or 2 octaves before sample-rate
+          and bit reduction, then slowed back down, so the original pitch and
+          length are kept but the effective sample rate is lower (e.g. 24&nbsp;kHz
+          with 1 octave behaves like 12&nbsp;kHz).
+        </p>
+        <div id="audio-container"></div>
+      </section>
+    </main>
+    <footer class="copyright">&copy; 2025 - yyyk</footer>
     <script type="module" src="/src/main.ts"></script>
     <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
   </body>

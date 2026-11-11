@@ -112,6 +112,7 @@ function process(
   return [output, SampleRates["44.1kHz"], numberOfChannels];
 }
 
+
 function makeExportFilename(
   originalName: string,
   sampleRate: number,
@@ -124,118 +125,144 @@ function makeExportFilename(
   }pre-pitched.wav`;
 }
 
-function processAudio(
-  name: string,
-  audioBuffer: AudioBuffer,
-  param: AudioParam
-) {
+function formatSampleRate(hz: number) {
+  return `${hz / 1000} kHz`;
+}
+
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+const DEFAULT_DRAG_TEXT = "or drag & drop it here";
+
+const byId = <T extends HTMLElement>(id: string) =>
+  document.getElementById(id) as T;
+
+const els = {
+  inputContainer: byId<HTMLLabelElement>("input-container"),
+  fileInput: byId<HTMLInputElement>("fileInput"),
+  dragText: document.querySelector(".drag-text") as HTMLSpanElement,
+  originalContainer: byId<HTMLElement>("original-container"),
+  fileInfo: byId<HTMLParagraphElement>("file-info"),
+  originalAudio: byId<HTMLAudioElement>("original-audio"),
+  status: byId<HTMLDivElement>("status"),
+  statusText: byId<HTMLSpanElement>("status-text"),
+  statusProgress: byId<HTMLProgressElement>("status-progress"),
+  results: byId<HTMLElement>("results"),
+  audioContainer: byId<HTMLDivElement>("audio-container"),
+};
+
+let audioCtx: AudioContext;
+let objectUrls: string[] = [];
+let currentJob = 0;
+let dragTextTimer: number | undefined;
+
+function createUrl(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  objectUrls.push(url);
+  return url;
+}
+
+function revokeUrls() {
+  objectUrls.forEach((url) => URL.revokeObjectURL(url));
+  objectUrls = [];
+}
+
+function setDragText(text: string, state: "default" | "selected" | "error") {
+  clearTimeout(dragTextTimer);
+  els.dragText.textContent = text;
+  els.inputContainer.dataset.state = state;
+}
+
+function showError(message = "Please select an audio file") {
+  setDragText(message, "error");
+  dragTextTimer = window.setTimeout(
+    () => setDragText(DEFAULT_DRAG_TEXT, "default"),
+    3000
+  );
+}
+
+function setStatus(text: string | null, progress = 0) {
+  els.status.hidden = text === null;
+  els.statusText.textContent = text ?? "";
+  els.statusProgress.value = progress;
+}
+
+// Let the browser paint between heavy synchronous steps
+const yieldToBrowser = () => new Promise<void>((r) => setTimeout(r, 0));
+
+function createCard(name: string, url: string, param: AudioParam) {
   const { targetSampleRate, targetBitDepth, octave } = param;
-  const [output, sampleRate, numberOfChannels] = process(
-    audioBuffer,
+
+  const card = document.createElement("article");
+  card.className = "card";
+
+  const title = document.createElement("h3");
+  title.className = "card-title";
+  title.textContent = `${formatSampleRate(targetSampleRate)} / ${targetBitDepth}-bit`;
+
+  const tag = document.createElement("span");
+  tag.className = "card-tag";
+  if (octave > 0) {
+    tag.textContent = `+${octave} octave${octave > 1 ? "s" : ""} pre-pitch`;
+    tag.classList.add("card-tag-active");
+  } else {
+    tag.textContent = "no pre-pitch";
+  }
+
+  const player = document.createElement("audio");
+  player.controls = true;
+  player.preload = "metadata";
+  player.src = url;
+
+  const download = document.createElement("a");
+  download.className = "download-button";
+  download.href = url;
+  download.download = makeExportFilename(
+    name,
     targetSampleRate,
     targetBitDepth,
     octave
   );
-  const blob = encodeWAV(output, sampleRate, numberOfChannels);
-  const url = URL.createObjectURL(blob);
-  const handle = `${targetSampleRate}_${targetBitDepth}_${octave}`;
-  // Sub Container
-  let section = document.getElementById(`section_${handle}`) as HTMLDivElement;
-  if (!section) {
-    section = document.createElement("div");
-    section.id = `section_${handle}`;
-    document.getElementById("audio-container")?.appendChild(section);
-  }
-  // Title Text
-  let title = document.getElementById(
-    `title_${handle}`
-  ) as HTMLParagraphElement;
-  if (!title) {
-    title = document.createElement("p");
-    title.id = `title_${handle}`;
-    section.appendChild(title);
-  }
-  title.innerHTML = `${targetSampleRate}Hz / ${targetBitDepth}bit${
-    octave > 0
-      ? `<br/><span class="small-text">${octave} octave${
-          octave > 1 ? "s" : ""
-        } pre-pitched<span>`
-      : ""
-  }`;
-  // Audio Player
-  let player = document.getElementById(`audio_${handle}`) as HTMLAudioElement;
-  if (!player) {
-    player = document.createElement("audio");
-    player.id = `audio_${handle}`;
-    player.controls = true;
-    section.appendChild(player);
-  }
-  player.src = url;
-  // Download Button
-  let button = document.getElementById(`button_${handle}`) as HTMLButtonElement;
-  if (button) {
-    section.removeChild(button);
-  }
-  button = document.createElement("button");
-  button.id = `button_${handle}`;
-  button.innerText = "download";
-  button.addEventListener("click", () => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = makeExportFilename(
-      name,
-      targetSampleRate,
-      targetBitDepth,
-      octave
-    );
-    a.click();
-  });
-  section.appendChild(button);
+  download.textContent = "Download WAV";
+
+  card.append(title, tag, player, download);
+  return card;
 }
 
-let audioCtx: AudioContext;
+async function loadFile(file: File): Promise<void> {
+  // Any in-flight job for a previous file stops at its next checkpoint
+  const job = ++currentJob;
+  const isStale = () => job !== currentJob;
 
-async function onFileChange(e: any): Promise<void> {
-  const file = e.target.files[0];
-  if (!file) return;
+  setDragText(`${file.name} selected`, "selected");
+  revokeUrls();
+  els.audioContainer.replaceChildren();
+  els.results.hidden = true;
+  els.originalContainer.hidden = true;
+  els.originalAudio.removeAttribute("src");
+  setStatus("Decoding…");
 
-  const inputContainer = document.getElementById(
-    "input-container"
-  ) as HTMLDivElement;
-  const dragText = inputContainer.querySelector(
-    ".drag-text"
-  ) as HTMLParagraphElement;
-  dragText.textContent = `✅ ${file.name} selected`;
-  dragText.style.color = "var(--mpc-red)";
-  const originalAudio = document.getElementById(
-    "original-audio"
-  ) as HTMLAudioElement;
-  if (originalAudio) {
-    inputContainer.removeChild(originalAudio);
-  }
-
-  const audioContainer = document.getElementById(
-    "audio-container"
-  ) as HTMLDivElement;
-  audioContainer.innerHTML = "";
-
-  // console.log(file);
   let decodedData;
 
   try {
     const arrayBuffer = await file.arrayBuffer();
     if (audioCtx) {
       audioCtx.close();
-      // console.log("close audio context");
     }
     audioCtx = new window.AudioContext({ sampleRate: SampleRates["44.1kHz"] });
     decodedData = await audioCtx.decodeAudioData(arrayBuffer);
   } catch {
-    handleDropError();
+    if (!isStale()) {
+      setStatus(null);
+      showError();
+    }
     return;
   }
+  if (isStale()) return;
 
-  // console.log(decodedData)
   let audioBuffer;
 
   try {
@@ -255,9 +282,13 @@ async function onFileChange(e: any): Promise<void> {
 
     audioBuffer = await offlineCtx.startRendering();
   } catch {
-    handleDropError("❌ Something went wrong. Please try again");
+    if (!isStale()) {
+      setStatus(null);
+      showError("Something went wrong. Please try again");
+    }
     return;
   }
+  if (isStale()) return;
 
   {
     // Original Audio
@@ -270,115 +301,81 @@ async function onFileChange(e: any): Promise<void> {
       }
     }
     const blob = encodeWAV(interleaved, sampleRate, numberOfChannels);
-    const url = URL.createObjectURL(blob);
-    let player = document.getElementById("original-audio") as HTMLAudioElement;
-    if (!player) {
-      player = document.createElement("audio");
-      player.id = "original-audio";
-      player.controls = true;
-      inputContainer.appendChild(player);
-    }
-    player.src = url;
+    els.originalAudio.src = createUrl(blob);
+    els.fileInfo.textContent = `${file.name} · ${formatDuration(
+      audioBuffer.duration
+    )} · ${numberOfChannels === 1 ? "mono" : "stereo"}`;
+    els.originalContainer.hidden = false;
   }
 
   // Processed Audio
-  params.forEach((param) => processAudio(file.name, audioBuffer, param));
-}
+  els.results.hidden = false;
+  for (const [i, param] of params.entries()) {
+    setStatus(`Processing ${i + 1} of ${params.length}…`, i / params.length);
+    await yieldToBrowser();
+    if (isStale()) return;
 
-function handleDropError(message?: string) {
-  const inputContainer = document.getElementById(
-    "input-container"
-  ) as HTMLDivElement;
-  // Show error for non-audio files
-  const dragText = inputContainer.querySelector(
-    ".drag-text"
-  ) as HTMLParagraphElement;
-  dragText.textContent = message ?? "❌ Please select an audio file";
-  dragText.style.color = "var(--text-error)";
-
-  // Reset text after 3 seconds
-  setTimeout(() => {
-    dragText.textContent = "📁 Select an audio file or drag & drop here";
-    dragText.style.color = "var(--text-secondary)";
-  }, 3000);
+    const { targetSampleRate, targetBitDepth, octave } = param;
+    const [output, sampleRate, numberOfChannels] = process(
+      audioBuffer,
+      targetSampleRate,
+      targetBitDepth,
+      octave
+    );
+    const url = createUrl(encodeWAV(output, sampleRate, numberOfChannels));
+    els.audioContainer.append(createCard(file.name, url, param));
+  }
+  setStatus(null);
 }
 
 function main() {
-  // Drag and Drop functionality
-  const inputContainer = document.getElementById(
-    "input-container"
-  ) as HTMLDivElement;
-  const fileInput = document.getElementById("fileInput") as HTMLInputElement;
+  const { inputContainer, fileInput } = els;
 
-  // Prevent default drag behaviors
+  // Prevent the browser from opening files dropped anywhere on the page
   ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-    inputContainer.addEventListener(eventName, preventDefaults, false);
-    document.body.addEventListener(eventName, preventDefaults, false);
+    document.body.addEventListener(eventName, (e) => e.preventDefault());
   });
 
   // Highlight drop area when item is dragged over it
   ["dragenter", "dragover"].forEach((eventName) => {
-    inputContainer.addEventListener(eventName, highlight, false);
+    inputContainer.addEventListener(eventName, () =>
+      inputContainer.classList.add("drag-over")
+    );
   });
 
   ["dragleave", "drop"].forEach((eventName) => {
-    inputContainer.addEventListener(eventName, unhighlight, false);
+    inputContainer.addEventListener(eventName, () =>
+      inputContainer.classList.remove("drag-over")
+    );
   });
 
-  // Handle dropped files
-  inputContainer.addEventListener("drop", handleDrop, false);
-
-  // Make the entire container clickable
-  // inputContainer.addEventListener("click", () => {
-  //   fileInput.click();
-  // });
-
-  function preventDefaults(e: Event) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  function highlight() {
-    inputContainer.classList.add("drag-over");
-  }
-
-  function unhighlight() {
-    inputContainer.classList.remove("drag-over");
-  }
-
-  function handleDrop(e: DragEvent) {
-    const dt = e.dataTransfer;
-    if (!dt) {
-      return;
+  inputContainer.addEventListener("drop", (e: DragEvent) => {
+    const audioFile = e.dataTransfer?.files[0];
+    if (!audioFile) return;
+    if (audioFile.type.startsWith("audio/")) {
+      loadFile(audioFile);
+    } else {
+      showError();
     }
-    const files = dt.files;
+  });
 
-    if (files.length > 0) {
-      const audioFile = files[0];
-      // Check if it's an audio file
-      if (audioFile.type.startsWith("audio/")) {
-        // Create a new FileList and assign it to the input
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(audioFile);
-        fileInput.files = dataTransfer.files;
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (file) loadFile(file);
+    // Allow re-selecting the same file
+    fileInput.value = "";
+  });
 
-        // Trigger change event
-        const event = new Event("change", { bubbles: true });
-        fileInput.dispatchEvent(event);
-
-        // Update the text to show file name
-        const dragText = inputContainer.querySelector(
-          ".drag-text"
-        ) as HTMLParagraphElement;
-        dragText.textContent = `✅ ${audioFile.name} selected`;
-        dragText.style.color = "var(--mpc-red)";
-      } else {
-        handleDropError();
-      }
-    }
-  }
-
-  fileInput.addEventListener("change", onFileChange);
+  // Only one player at a time, so variants are easy to A/B
+  document.addEventListener(
+    "play",
+    (e) => {
+      document.querySelectorAll("audio").forEach((audio) => {
+        if (audio !== e.target) audio.pause();
+      });
+    },
+    true
+  );
 }
 
 main();
